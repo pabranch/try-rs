@@ -551,6 +551,37 @@ fn config_with_invalid_theme_falls_back() {
 }
 
 #[test]
+fn non_interactive_run_does_not_modify_rc_files() {
+    // A non-interactive run (stdin is not a TTY, as with Command::output())
+    // must never append a `source` line to the user's rc files: the optional
+    // shell-integration prompt should be skipped instead of defaulting to yes.
+    let home = TempDir::new("try-home-no-rc").unwrap();
+    let config_dir = TempDir::new("try-config-no-rc").unwrap();
+
+    let bashrc = home.path().join(".bashrc");
+    let original = "# user bashrc\n";
+    fs::write(&bashrc, original).unwrap();
+
+    let p = Command::new("cargo")
+        .arg("run")
+        .arg("--")
+        .arg("no-rc-proj")
+        .env("HOME", home.path())
+        .env("SHELL", "/bin/bash")
+        .env_remove("TRY_PATH")
+        .env("TRY_CONFIG_DIR", config_dir.path())
+        .output()
+        .expect("failed to spawn");
+
+    assert!(p.status.success());
+    assert_eq!(
+        fs::read_to_string(&bashrc).unwrap(),
+        original,
+        "non-interactive run must not modify the rc file"
+    );
+}
+
+#[test]
 fn try_path_env_overrides_config() {
     let h = Harness::new(false);
     let override_dir = TempDir::new("try-override-path").unwrap();
