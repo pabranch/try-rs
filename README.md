@@ -258,6 +258,7 @@ editor = "code" # Optional: code, nvim, hx, etc.
 apply_date_prefix = true # optional, default is false
 date_prefix_format = "%Y-%m-%d" # optional, default is %Y-%m-%d (chrono format string)
 transparent_background = true # optional, default is true (uses terminal background)
+clone_depth = 1 # optional, shallow clone depth when cloning repositories (default is 1)
 ```
 
 **Background Transparency:**
@@ -385,6 +386,7 @@ You can also bypass the UI:
 | `try-rs <https://github.com/user/repo>`        | Clones a repository into a dated folder                             |
 | `try-rs <https://github.com/user/repo> <name>` | Clones a repository into a specific folder name (destination)       |
 | `try-rs -f <url>` / `try-rs --full-clone`     | Full clone (omit --depth 1) when cloning repositories               |
+| `try-rs --depth <n> <url>`                     | Shallow clone with a custom depth (default: 1)                      |
 | `try-rs -w <name>` / `try-rs --worktree`       | Create a git worktree from current repository (must be inside repo) |
 | `try-rs --setup <shell>`                       | Setup shell integration (fish, zsh, bash, nu-shell, power-shell)    |
 | `try-rs --setup-stdout <shell>`                | Print shell integration script to stdout (for manual setup)         |

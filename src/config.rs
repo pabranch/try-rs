@@ -20,6 +20,7 @@ pub struct Config {
     pub show_legend: Option<bool>,
     pub show_right_panel: Option<bool>,
     pub right_panel_width: Option<u16>,
+    pub clone_depth: Option<u32>,
 }
 
 /// Get the config file name, respecting the `TRY_CONFIG` environment variable.
@@ -101,6 +102,7 @@ pub struct AppConfig {
     pub show_legend: Option<bool>,
     pub show_right_panel: Option<bool>,
     pub right_panel_width: Option<u16>,
+    pub clone_depth: Option<u32>,
 }
 
 /// Load and merge all configuration sources into a single `AppConfig`.
@@ -132,6 +134,7 @@ pub fn load_configuration() -> AppConfig {
     let mut show_legend = None;
     let mut show_right_panel = None;
     let mut right_panel_width = None;
+    let mut clone_depth = None;
 
     let loaded_config_path = find_config_path();
 
@@ -164,6 +167,8 @@ pub fn load_configuration() -> AppConfig {
         show_legend = config.show_legend;
         show_right_panel = config.show_right_panel;
         right_panel_width = config.right_panel_width;
+        // Guard against invalid config values; `git clone --depth 0` errors out.
+        clone_depth = config.clone_depth.filter(|&depth| depth >= 1);
     }
 
     AppConfig {
@@ -180,6 +185,7 @@ pub fn load_configuration() -> AppConfig {
         show_legend,
         show_right_panel,
         right_panel_width,
+        clone_depth,
     }
 }
 
@@ -199,6 +205,7 @@ pub fn save_config(
     show_legend: Option<bool>,
     show_right_panel: Option<bool>,
     right_panel_width: Option<u16>,
+    clone_depth: Option<u32>,
 ) -> std::io::Result<()> {
     let paths_string = tries_paths
         .iter()
@@ -219,6 +226,7 @@ pub fn save_config(
         show_legend,
         show_right_panel,
         right_panel_width,
+        clone_depth,
     };
 
     let toml_string =

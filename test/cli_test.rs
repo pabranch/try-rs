@@ -10,6 +10,7 @@ fn cli_default_values() {
     assert!(cli.setup_stdout.is_none());
     assert!(cli.completions.is_none());
     assert!(!cli.full_clone);
+    assert!(cli.depth.is_none());
     assert!(cli.worktree.is_none());
     assert!(!cli.show_disk);
     assert!(cli.hide_disk);
@@ -104,6 +105,31 @@ fn cli_full_clone_flag() {
 fn cli_shorthand_full_clone_flag() {
     let cli = Cli::try_parse_from(["try-rs", "-f", "https://github.com/user/repo.git"]).unwrap();
     assert!(cli.full_clone);
+}
+
+#[test]
+fn cli_depth_flag() {
+    let cli = Cli::try_parse_from(["try-rs", "--depth", "5", "https://github.com/user/repo.git"])
+        .unwrap();
+    assert_eq!(cli.depth, Some(5));
+}
+
+#[test]
+fn cli_depth_rejects_zero() {
+    let result = Cli::try_parse_from(["try-rs", "--depth", "0", "https://github.com/user/repo.git"]);
+    assert!(result.is_err());
+}
+
+#[test]
+fn cli_depth_conflicts_with_full_clone() {
+    let result = Cli::try_parse_from([
+        "try-rs",
+        "--depth",
+        "3",
+        "--full-clone",
+        "https://github.com/user/repo.git",
+    ]);
+    assert!(result.is_err());
 }
 
 #[test]

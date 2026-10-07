@@ -24,6 +24,7 @@ save_config(
         Some(false),
         Some(true),
         Some(40),
+        Some(5),
     )
     .unwrap();
 
@@ -39,6 +40,7 @@ save_config(
     assert_eq!(loaded.show_legend, Some(false));
     assert_eq!(loaded.show_right_panel, Some(true));
     assert_eq!(loaded.right_panel_width, Some(40));
+    assert_eq!(loaded.clone_depth, Some(5));
 }
 
 #[test]
@@ -52,6 +54,7 @@ fn save_config_creates_parent_dirs() {
         &theme,
         &[PathBuf::from("/tmp/t")],
         &None,
+        None,
         None,
         None,
         None,
@@ -85,6 +88,7 @@ fn save_config_none_optionals() {
         None,
         None,
         None,
+        None,
     )
     .unwrap();
 
@@ -98,6 +102,7 @@ fn save_config_none_optionals() {
     assert!(loaded.show_legend.is_none());
     assert!(loaded.show_right_panel.is_none());
     assert!(loaded.right_panel_width.is_none());
+    assert!(loaded.clone_depth.is_none());
 }
 
 #[test]
@@ -115,6 +120,7 @@ fn config_serialization_roundtrip() {
         show_legend: Some(false),
         show_right_panel: Some(true),
         right_panel_width: Some(25),
+        clone_depth: None,
     };
 
     let toml_str = toml::to_string(&config).unwrap();
@@ -199,6 +205,7 @@ fn save_config_preserves_theme_name() {
             None,
             None,
             None,
+            None,
         )
         .unwrap();
 
@@ -255,6 +262,7 @@ fn config_save_and_load_roundtrip() {
         Some(true),
         Some(false),
         Some(52),
+        Some(9),
     )
     .unwrap();
 
@@ -270,6 +278,7 @@ fn config_save_and_load_roundtrip() {
     assert_eq!(loaded.show_legend, Some(true));
     assert_eq!(loaded.show_right_panel, Some(false));
     assert_eq!(loaded.right_panel_width, Some(52));
+    assert_eq!(loaded.clone_depth, Some(9));
 }
 
 #[test]
@@ -314,6 +323,7 @@ fn config_preserve_booleans_exact() {
         show_legend: Some(false),
         show_right_panel: Some(true),
         right_panel_width: Some(41),
+        clone_depth: None,
     };
 
     let toml = toml::to_string(&config1).unwrap();
@@ -346,6 +356,7 @@ fn config_with_empty_strings() {
         show_legend: None,
         show_right_panel: None,
         right_panel_width: None,
+        clone_depth: None,
     };
 
     let toml = toml::to_string(&config).unwrap();
@@ -375,6 +386,7 @@ fn config_save_overwrites_existing() {
         None,
         None,
         None,
+        None,
     )
     .unwrap();
 
@@ -392,6 +404,7 @@ fn config_save_overwrites_existing() {
         Some(true),
         Some(false),
         Some(63),
+        Some(11),
     )
     .unwrap();
 
@@ -407,6 +420,7 @@ fn config_save_overwrites_existing() {
     assert_eq!(loaded.show_legend, Some(true));
     assert_eq!(loaded.show_right_panel, Some(false));
     assert_eq!(loaded.right_panel_width, Some(63));
+    assert_eq!(loaded.clone_depth, Some(11));
     assert_eq!(loaded.theme, Some("Tokyo Night".to_string()));
 }
 
@@ -425,6 +439,7 @@ fn config_serialization_order() {
         show_legend: Some(false),
         show_right_panel: Some(true),
         right_panel_width: Some(37),
+        clone_depth: None,
     };
 
     let toml = toml::to_string(&config).unwrap();
@@ -505,6 +520,7 @@ fn config_handles_very_long_values() {
         show_legend: None,
         show_right_panel: None,
         right_panel_width: None,
+        clone_depth: None,
     };
 
     let toml = toml::to_string(&config).unwrap();
