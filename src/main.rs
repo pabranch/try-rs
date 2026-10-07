@@ -25,7 +25,7 @@ mod tui;
 mod utils;
 
 use cli::{Cli, Shell};
-use config::{AppConfig, load_configuration};
+use config::{AppConfig, effective_clone_depth, load_configuration};
 use shell::{clear_shell_setup, generate_completions, get_shell_content, setup_shell};
 use tui::{App, run_app};
 
@@ -335,11 +335,7 @@ fn main() -> Result<()> {
 
     // Effective clone depth: `--full-clone` disables shallow cloning entirely,
     // `--depth` overrides the configured value, and the default is depth 1.
-    let clone_depth = if cli.full_clone {
-        None
-    } else {
-        Some(cli.depth.or(config_clone_depth).unwrap_or(1))
-    };
+    let clone_depth = effective_clone_depth(cli.full_clone, cli.depth, config_clone_depth);
 
     let resolve_visibility = |cli_show: bool, cli_hide: bool, config_show: Option<bool>| -> bool {
         if !cli_hide {

@@ -528,3 +528,61 @@ fn config_handles_very_long_values() {
 
     assert_eq!(loaded.tries_path, Some(long_path));
 }
+
+#[test]
+fn parse_clone_depth_accepts_positive_integers() {
+    assert_eq!(parse_clone_depth("1"), Some(1));
+    assert_eq!(parse_clone_depth("5"), Some(5));
+    assert_eq!(parse_clone_depth("  42  "), Some(42));
+    assert_eq!(parse_clone_depth("4294967295"), Some(u32::MAX));
+}
+
+#[test]
+fn parse_clone_depth_rejects_invalid_values() {
+    assert_eq!(parse_clone_depth("0"), None);
+    assert_eq!(parse_clone_depth("-3"), None);
+    assert_eq!(parse_clone_depth("1.5"), None);
+    assert_eq!(parse_clone_depth("abc"), None);
+    assert_eq!(parse_clone_depth(""), None);
+    assert_eq!(parse_clone_depth("4294967296"), None);
+}
+
+#[test]
+fn resolve_clone_depth_prefers_env_over_config() {
+    assert_eq!(resolve_clone_depth(Some("7"), Some(3)), Some(7));
+    assert_eq!(resolve_clone_depth(None, Some(3)), Some(3));
+    assert_eq!(resolve_clone_depth(None, None), None);
+}
+
+#[test]
+fn resolve_clone_depth_ignores_invalid_values() {
+    // An invalid env value falls back to the config value...
+    assert_eq!(resolve_clone_depth(Some("0"), Some(3)), Some(3));
+    assert_eq!(resolve_clone_depth(Some("abc"), Some(3)), Some(3));
+    // ...and an invalid config value is ignored too.
+    assert_eq!(resolve_clone_depth(Some("-1"), None), None);
+    assert_eq!(resolve_clone_depth(None, Some(0)), None);
+}
+
+#[test]
+fn effective_clone_depth_cli_overrides_env_and_config() {
+    // Build the resolved default the same way `load_configuration` does:
+    // the env var wins over the config value.
+    let env_and_config = resolve_clone_depth(Some("7"), Some(3));
+    assert_eq!(env_and_config, Some(7));
+
+    // `--depth` wins over that resolved default.
+    assert_eq!(effective_clone_depth(false, Some(5), env_and_config), Some(5));
+    // Without `--depth`, the resolved env/config default applies.
+    assert_eq!(effective_clone_depth(false, None, env_and_config), Some(7));
+    assert_eq!(effective_clone_depth(false, None, Some(3)), Some(3));
+    // With nothing set, the built-in default is 1.
+    assert_eq!(effective_clone_depth(false, None, None), Some(1));
+}
+
+#[test]
+fn effective_clone_depth_full_clone_wins_over_everything() {
+    assert_eq!(effective_clone_depth(true, Some(5), Some(3)), None);
+    assert_eq!(effective_clone_depth(true, None, Some(3)), None);
+    assert_eq!(effective_clone_depth(true, None, None), None);
+}

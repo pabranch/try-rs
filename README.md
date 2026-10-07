@@ -323,6 +323,7 @@ You can also configure **try-rs** using environment variables:
 | `TRY_PATH`          | Overrides the path where experiments are stored.           |
 | `TRY_CONFIG_DIR`    | Overrides the default configuration directory.             |
 | `TRY_CONFIG`        | Overrides the config filename (defaults to `config.toml`). |
+| `TRY_CLONE_DEPTH`   | Default clone depth (overrides `clone_depth`).             |
 | `VISUAL` / `EDITOR` | Default editor to use if not specified in `config.toml`.   |
 
 ## Usage

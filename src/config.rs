@@ -75,6 +75,42 @@ fn config_candidates() -> Vec<PathBuf> {
     candidates
 }
 
+/// Parse a clone depth from a string, accepting only positive integers.
+///
+/// Returns `None` for unparseable or non-positive values (e.g. `0`), which
+/// `git clone --depth` rejects.
+pub fn parse_clone_depth(value: &str) -> Option<u32> {
+    value.trim().parse::<u32>().ok().filter(|&depth| depth >= 1)
+}
+
+/// Resolve the default clone depth from the `TRY_CLONE_DEPTH` environment
+/// variable and the `clone_depth` config value.
+///
+/// The environment variable wins when valid; otherwise the config value is
+/// used. Invalid values are ignored, so `None` means "use the built-in
+/// default" (depth 1).
+pub fn resolve_clone_depth(env: Option<&str>, config: Option<u32>) -> Option<u32> {
+    env.and_then(parse_clone_depth)
+        .or_else(|| config.filter(|&depth| depth >= 1))
+}
+
+/// Compute the clone depth actually used for a clone operation.
+///
+/// `--full-clone` disables shallow cloning entirely (`None`). Otherwise the
+/// CLI `--depth` overrides the resolved default (from `TRY_CLONE_DEPTH` or
+/// `clone_depth`), falling back to depth 1.
+pub fn effective_clone_depth(
+    full_clone: bool,
+    cli_depth: Option<u32>,
+    default_depth: Option<u32>,
+) -> Option<u32> {
+    if full_clone {
+        None
+    } else {
+        Some(cli_depth.or(default_depth).unwrap_or(1))
+    }
+}
+
 /// Find the first existing config file path among the candidates.
 fn find_config_path() -> Option<PathBuf> {
     config_candidates().into_iter().find(|p| p.exists())
@@ -134,7 +170,8 @@ pub fn load_configuration() -> AppConfig {
     let mut show_legend = None;
     let mut show_right_panel = None;
     let mut right_panel_width = None;
-    let mut clone_depth = None;
+    let env_clone_depth = std::env::var("TRY_CLONE_DEPTH").ok();
+    let mut clone_depth = resolve_clone_depth(env_clone_depth.as_deref(), None);
 
     let loaded_config_path = find_config_path();
 
@@ -167,8 +204,8 @@ pub fn load_configuration() -> AppConfig {
         show_legend = config.show_legend;
         show_right_panel = config.show_right_panel;
         right_panel_width = config.right_panel_width;
-        // Guard against invalid config values; `git clone --depth 0` errors out.
-        clone_depth = config.clone_depth.filter(|&depth| depth >= 1);
+        // The environment variable takes precedence over the config file.
+        clone_depth = resolve_clone_depth(env_clone_depth.as_deref(), config.clone_depth);
     }
 
     AppConfig {
