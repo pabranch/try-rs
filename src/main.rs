@@ -215,6 +215,14 @@ fn detect_and_setup_shell() -> Result<()> {
 
     if let Some(ref s) = shell_type {
         if !shell::is_shell_integration_configured(s) {
+            // Without an interactive terminal we cannot ask for confirmation.
+            // Skip setup so non-interactive runs (scripts, CI, tests) never
+            // mutate the user's rc files with a `source` line that may point
+            // to a temporary integration script.
+            if !io::stdin().is_terminal() || !io::stderr().is_terminal() {
+                return Ok(());
+            }
+
             eprintln!("Detected shell: {:?}", s);
             eprint!("Shell integration not configured. Do you want to set it up? [Y/n] ");
             io::stderr().flush()?;
