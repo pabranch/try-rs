@@ -434,6 +434,10 @@ fn help_contains_expected_flags() {
         "should document full clone"
     );
     assert!(
+        output.contains("--depth"),
+        "should document clone depth flag"
+    );
+    assert!(
         output.contains("--worktree") || output.contains("-w"),
         "should document worktree flag"
     );

@@ -83,6 +83,7 @@ pub struct App {
     pub show_legend: bool,
     pub right_panel_visible: bool,
     pub right_panel_width: u16,
+    pub clone_depth: Option<u32>,
 
     pub tries_dirs: Vec<PathBuf>,
     pub active_tab: usize,
@@ -261,6 +262,7 @@ impl App {
             show_legend: true,
             right_panel_visible: true,
             right_panel_width: 25,
+            clone_depth: None,
             tries_dirs: tries_dirs.clone(),
             active_tab,
             available_themes: themes,
@@ -1759,6 +1761,7 @@ pub fn run_app(
                                         Some(app.show_legend),
                                         Some(app.right_panel_visible),
                                         Some(app.right_panel_width),
+                                        app.clone_depth,
                                     ) {
                                         app.status_message = Some(format!("Error saving: {}", e));
                                     } else {
@@ -1849,6 +1852,7 @@ pub fn run_app(
                                 Some(app.show_legend),
                                 Some(app.right_panel_visible),
                                 Some(app.right_panel_width),
+                                app.clone_depth,
                             ) {
                                 app.status_message = Some(format!("Error saving config: {}", e));
                             } else {

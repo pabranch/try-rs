@@ -30,8 +30,12 @@ pub struct Cli {
     pub completions: Option<Shell>,
 
     /// Perform a full clone instead of the default shallow clone (--depth 1)
-    #[arg(short = 'f', long)]
+    #[arg(short = 'f', long, conflicts_with = "depth")]
     pub full_clone: bool,
+
+    /// Shallow clone depth for repositories (default: 1)
+    #[arg(long, value_name = "DEPTH", value_parser = clap::value_parser!(u32).range(1..))]
+    pub depth: Option<u32>,
 
     /// Create a git worktree from current repository (must be inside a git repo)
     #[arg(short = 'w', long = "worktree", value_name = "WORKTREE_NAME")]

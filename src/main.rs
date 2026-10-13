@@ -25,7 +25,7 @@ mod tui;
 mod utils;
 
 use cli::{Cli, Shell};
-use config::{AppConfig, load_configuration};
+use config::{AppConfig, effective_clone_depth, load_configuration};
 use shell::{clear_shell_setup, generate_completions, get_shell_content, setup_shell};
 use tui::{App, run_app};
 
@@ -241,7 +241,7 @@ fn detect_and_setup_shell() -> Result<()> {
 fn handle_clone(
     url: &str,
     destination: Option<String>,
-    full_clone: bool,
+    depth: Option<u32>,
     tries_dir: &std::path::Path,
     apply_date_prefix: Option<bool>,
     date_prefix_format: Option<&str>,
@@ -259,8 +259,9 @@ fn handle_clone(
 
     let mut cmd = std::process::Command::new("git");
     cmd.arg("clone");
-    if !full_clone {
-        cmd.arg("--depth").arg("1");
+    if let Some(depth) = depth {
+        cmd.arg("--depth").arg(depth.to_string());
+        cmd.arg("--shallow-submodules");
     }
 
     let status = cmd
@@ -329,7 +330,12 @@ fn main() -> Result<()> {
         show_legend,
         show_right_panel,
         right_panel_width,
+        clone_depth: config_clone_depth,
     }: AppConfig = load_configuration();
+
+    // Effective clone depth: `--full-clone` disables shallow cloning entirely,
+    // `--depth` overrides the configured value, and the default is depth 1.
+    let clone_depth = effective_clone_depth(cli.full_clone, cli.depth, config_clone_depth);
 
     let resolve_visibility = |cli_show: bool, cli_hide: bool, config_show: Option<bool>| -> bool {
         if !cli_hide {
@@ -493,6 +499,7 @@ fn main() -> Result<()> {
             app.show_legend = show_legend;
             app.right_panel_visible = show_right_panel;
             app.right_panel_width = right_panel_width;
+            app.clone_depth = config_clone_depth;
             let res = run_app(&mut terminal, app);
 
             disable_raw_mode()?;
@@ -532,7 +539,7 @@ fn main() -> Result<()> {
                 handle_clone(
                     &selection,
                     cli.destination.clone(),
-                    cli.full_clone,
+                    clone_depth,
                     &selected_dir,
                     apply_date_prefix,
                     date_prefix_format.as_deref(),
