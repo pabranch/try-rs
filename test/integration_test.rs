@@ -529,27 +529,66 @@ fn non_interactive_run_does_not_modify_rc_files() {
     // A non-interactive run (stdin is not a TTY, as with Command::output())
     // must never append a `source` line to the user's rc files: the optional
     // shell-integration prompt should be skipped instead of defaulting to yes.
+    //
+    // `HOME` only redirects the rc file lookup on unix; on Windows the profile
+    // path comes from the Win32 known-folder API and `SHELL` is ignored in
+    // favour of PowerShell, so it cannot be sandboxed from here (`USERPROFILE`
+    // is not consulted, and pointing cargo's own home at a temp dir would make
+    // `cargo run` re-fetch the registry). Besides the unix-only rc file check,
+    // the test therefore asserts platform-neutral symptoms of the guard not
+    // firing: no integration script in the sandboxed config dir and no prompt
+    // on stderr. On Windows a regression shows up as a stray `try-rs.ps1` plus
+    // a write to the real profile — the guard failing is the alarm.
     let home = TempDir::new("try-home-no-rc").unwrap();
     let config_dir = TempDir::new("try-config-no-rc").unwrap();
 
-    let bashrc = home.path().join(".bashrc");
-    let original = "# user bashrc\n";
-    fs::write(&bashrc, original).unwrap();
+    #[cfg(unix)]
+    let (shell, rc_file, original, integration_script) = {
+        let bashrc = home.path().join(".bashrc");
+        let original = "# user bashrc\n";
+        fs::write(&bashrc, original).unwrap();
+        (
+            "/bin/bash",
+            bashrc,
+            original,
+            config_dir.path().join("try-rs.bash"),
+        )
+    };
+    #[cfg(windows)]
+    let (shell, integration_script) = (
+        "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+        config_dir.path().join("try-rs.ps1"),
+    );
 
     let p = Command::new("cargo")
         .arg("run")
         .arg("--")
         .arg("no-rc-proj")
         .env("HOME", home.path())
-        .env("SHELL", "/bin/bash")
+        .env("SHELL", shell)
+        .env_remove("NU_VERSION")
         .env_remove("TRY_PATH")
         .env("TRY_CONFIG_DIR", config_dir.path())
         .output()
         .expect("failed to spawn");
 
     assert!(p.status.success());
+
+    let stderr = String::from_utf8(p.stderr).unwrap();
+    assert!(
+        !stderr.contains("Detected shell"),
+        "non-interactive run must not offer shell setup:\n{}",
+        stderr
+    );
+    assert!(
+        !integration_script.exists(),
+        "non-interactive run must not write {}",
+        integration_script.display()
+    );
+
+    #[cfg(unix)]
     assert_eq!(
-        fs::read_to_string(&bashrc).unwrap(),
+        fs::read_to_string(&rc_file).unwrap(),
         original,
         "non-interactive run must not modify the rc file"
     );
