@@ -1,6 +1,6 @@
 use std::{
     fs,
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Command, ExitStatus},
 };
 
@@ -316,6 +316,30 @@ struct Output {
     stderr: String,
 }
 
+/// Spawn `try-rs` against `config_dir`.
+///
+/// Always clears `SHELL` and `TRY_PATH` so the child cannot reach the real
+/// user's shell integration or tries directory; `extra_env` entries are applied
+/// afterwards and may override any of those defaults (e.g. to set `HOME`).
+fn spawn_try(config_dir: &Path, args: &[&str], extra_env: &[(&str, &str)]) -> Output {
+    let mut cmd = Command::new("cargo");
+    cmd.arg("run")
+        .arg("--")
+        .args(args)
+        .env("SHELL", "")
+        .env_remove("TRY_PATH")
+        .env("TRY_CONFIG_DIR", config_dir);
+    for (key, value) in extra_env {
+        cmd.env(key, value);
+    }
+    let output = cmd.output().expect("failed to spawn process");
+    Output {
+        status: output.status,
+        stdout: String::from_utf8(output.stdout).expect("couldn't read stdout to string"),
+        stderr: String::from_utf8(output.stderr).expect("couldn't read stderr to string"),
+    }
+}
+
 struct Harness {
     dir: TempDir,
 }
@@ -338,20 +362,7 @@ impl Harness {
     }
 
     fn run_try(&self, args: &[&str]) -> Output {
-        Command::new("cargo")
-            .arg("run")
-            .arg("--")
-            .args(args)
-            .env("SHELL", "")
-            .env_remove("TRY_PATH")
-            .env("TRY_CONFIG_DIR", self.dir.path())
-            .output()
-            .map(|output| Output {
-                status: output.status,
-                stderr: String::from_utf8(output.stderr).expect("couldn't read stderr to string"),
-                stdout: String::from_utf8(output.stdout).expect("couldn't read stdout to string"),
-            })
-            .expect("failed to spawn process")
+        spawn_try(self.dir.path(), args, &[])
     }
 
     fn tries_path(&self) -> PathBuf {
@@ -359,20 +370,7 @@ impl Harness {
     }
 
     fn run_try_with_env(&self, args: &[&str], env_key: &str, env_val: &str) -> Output {
-        Command::new("cargo")
-            .arg("run")
-            .arg("--")
-            .args(args)
-            .env_remove("TRY_PATH")
-            .env("TRY_CONFIG_DIR", self.dir.path())
-            .env(env_key, env_val)
-            .output()
-            .map(|output| Output {
-                status: output.status,
-                stderr: String::from_utf8(output.stderr).expect("couldn't read stderr to string"),
-                stdout: String::from_utf8(output.stdout).expect("couldn't read stdout to string"),
-            })
-            .expect("failed to spawn process")
+        spawn_try(self.dir.path(), args, &[(env_key, env_val)])
     }
 
     fn create_try_folder(&self, name: &str) {
@@ -491,16 +489,10 @@ fn config_with_editor_field() {
     );
     fs::write(dir.path().join("config.toml"), config).unwrap();
 
-    let p = Command::new("cargo")
-        .arg("run")
-        .arg("--")
-        .arg("editor-proj")
-        .env("TRY_CONFIG_DIR", dir.path())
-        .output()
-        .expect("failed to spawn");
+    let p = spawn_try(dir.path(), &["editor-proj"], &[]);
 
     // It should create the folder successfully
-    assert!(p.status.success() || !String::from_utf8(p.stdout).unwrap().is_empty());
+    assert!(p.status.success() || !p.stdout.is_empty());
 }
 
 #[test]
@@ -512,16 +504,9 @@ fn config_with_theme() {
     );
     fs::write(dir.path().join("config.toml"), config).unwrap();
 
-    let p = Command::new("cargo")
-        .arg("run")
-        .arg("--")
-        .arg("themed-proj")
-        .env("TRY_CONFIG_DIR", dir.path())
-        .output()
-        .expect("failed to spawn");
+    let p = spawn_try(dir.path(), &["themed-proj"], &[]);
 
-    let output = String::from_utf8(p.stdout).unwrap();
-    assert!(output.contains("cd"), "should produce cd command");
+    assert!(p.stdout.contains("cd"), "should produce cd command");
 }
 
 #[test]
@@ -533,17 +518,10 @@ fn config_with_invalid_theme_falls_back() {
     );
     fs::write(dir.path().join("config.toml"), config).unwrap();
 
-    let p = Command::new("cargo")
-        .arg("run")
-        .arg("--")
-        .arg("fallback-proj")
-        .env("TRY_CONFIG_DIR", dir.path())
-        .output()
-        .expect("failed to spawn");
+    let p = spawn_try(dir.path(), &["fallback-proj"], &[]);
 
-    let output = String::from_utf8(p.stdout).unwrap();
     // Should still work, just using default theme
-    assert!(output.contains("cd"), "should still produce cd command");
+    assert!(p.stdout.contains("cd"), "should still produce cd command");
 }
 
 #[test]
