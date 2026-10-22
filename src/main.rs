@@ -219,7 +219,7 @@ fn detect_and_setup_shell() -> Result<()> {
             // Skip setup so non-interactive runs (scripts, CI, tests) never
             // mutate the user's rc files with a `source` line that may point
             // to a temporary integration script.
-            if !io::stdin().is_terminal() || !io::stderr().is_terminal() {
+            if !shell::should_offer_setup(io::stdin().is_terminal(), io::stderr().is_terminal()) {
                 return Ok(());
             }
 

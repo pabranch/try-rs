@@ -577,6 +577,17 @@ pub fn is_shell_integration_configured(shell: &Shell) -> bool {
     get_shell_integration_path(shell).exists()
 }
 
+/// Whether the optional shell-integration prompt may be shown.
+///
+/// Setting up integration appends a `source` line to the user's rc files, so it
+/// must only be offered when we can actually ask for confirmation: stdin (to
+/// read the answer) and stderr (to show the prompt) both have to be terminals.
+/// Non-interactive runs such as scripts, CI and tests therefore silently skip
+/// setup instead of defaulting to yes.
+pub fn should_offer_setup(stdin_is_terminal: bool, stderr_is_terminal: bool) -> bool {
+    stdin_is_terminal && stderr_is_terminal
+}
+
 /// Append a source command to an RC file if it is not already present.
 fn append_source_to_rc(rc_path: &std::path::Path, source_cmd: &str) -> Result<()> {
     if rc_path.exists() {

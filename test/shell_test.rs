@@ -266,3 +266,25 @@ fn all_shells_have_unique_extensions() {
         "All shells should have unique extensions"
     );
 }
+
+#[test]
+fn should_offer_setup_only_when_both_streams_are_terminals() {
+    // Setup appends a `source` line to the user's rc files, so it may only be
+    // offered when the answer can be read and the prompt can be shown.
+    // The mixed cases matter: stdout/stderr are commonly redirected while stdin
+    // stays a terminal, e.g. `try-rs foo | tee log`.
+    assert!(should_offer_setup(true, true));
+
+    assert!(
+        !should_offer_setup(false, true),
+        "piped stdin means nobody can answer the prompt"
+    );
+    assert!(
+        !should_offer_setup(true, false),
+        "redirected stderr means the prompt would be invisible"
+    );
+    assert!(
+        !should_offer_setup(false, false),
+        "fully non-interactive runs must skip setup"
+    );
+}
