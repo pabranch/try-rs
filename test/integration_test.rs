@@ -12,49 +12,28 @@ use tempdir::TempDir;
 
 #[test]
 fn shows_help() {
-    let p = Command::new("cargo")
-        .arg("run")
-        .arg("--")
-        .arg("--help")
-        .output()
-        .expect("failed to spawn process");
+    let p = spawn_try(None, &["--help"], &[]);
 
-    let output = String::from_utf8(p.stdout).unwrap();
-
-    assert!(output.contains("Usage: try-rs"));
+    assert!(p.stdout.contains("Usage: try-rs"));
 }
 
 #[test]
 fn shows_version() {
-    let p = Command::new("cargo")
-        .arg("run")
-        .arg("--")
-        .arg("--version")
-        .output()
-        .expect("failed to spawn process");
-
-    let stdout = String::from_utf8(p.stdout).unwrap();
-    let stderr = String::from_utf8(p.stderr).unwrap();
+    let p = spawn_try(None, &["--version"], &[]);
 
     assert!(
-        stdout.contains("try-rs"),
+        p.stdout.contains("try-rs"),
         "version output should go to stdout"
     );
     assert!(
-        !stderr.contains("try-rs 0."),
+        !p.stderr.contains("try-rs 0."),
         "version should not appear on stderr"
     );
 }
 
 #[test]
 fn invalid_shell_flag() {
-    let p = Command::new("cargo")
-        .arg("run")
-        .arg("--")
-        .arg("--shell")
-        .arg("invalid_shell")
-        .output()
-        .expect("failed to spawn process");
+    let p = spawn_try(None, &["--shell", "invalid_shell"], &[]);
 
     assert!(
         !p.status.success(),
@@ -204,21 +183,9 @@ fn new_worktree() {
     let git_dir = create_git_origin(&h).expect("could not setup git origin");
 
     // when
-    let try_exe = std::path::PathBuf::from(env!("CARGO_BIN_EXE_try-rs"));
-
-    let output = Command::new(format!("{}", try_exe.display()))
-        .current_dir(git_dir)
-        .args(["--worktree", "my-brand-new-feature"])
-        .env("SHELL", "")
-        .env_remove("TRY_PATH")
-        .env("TRY_CONFIG_DIR", h.dir.path())
-        .output()
-        .map(|output| Output {
-            status: output.status,
-            stderr: String::from_utf8(output.stderr).expect("couldn't read stderr to string"),
-            stdout: String::from_utf8(output.stdout).expect("couldn't read stdout to string"),
-        })
-        .expect("failed to spawn process");
+    let mut cmd = built_try(Some(h.dir.path()), &git_dir);
+    cmd.args(["--worktree", "my-brand-new-feature"]);
+    let output = run(&mut cmd);
 
     // then
     let expected_dir = h.tries_path().join("my-brand-new-feature");
@@ -316,28 +283,63 @@ struct Output {
     stderr: String,
 }
 
-/// Spawn `try-rs` against `config_dir`.
-///
-/// Always clears `SHELL` and `TRY_PATH` so the child cannot reach the real
-/// user's shell integration or tries directory; `extra_env` entries are applied
-/// afterwards and may override any of those defaults (e.g. to set `HOME`).
-fn spawn_try(config_dir: &Path, args: &[&str], extra_env: &[(&str, &str)]) -> Output {
-    let mut cmd = Command::new("cargo");
-    cmd.arg("run")
-        .arg("--")
-        .args(args)
-        .env("SHELL", "")
-        .env_remove("TRY_PATH")
-        .env("TRY_CONFIG_DIR", config_dir);
-    for (key, value) in extra_env {
-        cmd.env(key, value);
-    }
+/// Run a prepared command, capturing its output as [`Output`].
+fn run(cmd: &mut Command) -> Output {
     let output = cmd.output().expect("failed to spawn process");
     Output {
         status: output.status,
         stdout: String::from_utf8(output.stdout).expect("couldn't read stdout to string"),
         stderr: String::from_utf8(output.stderr).expect("couldn't read stderr to string"),
     }
+}
+
+/// Apply the environment every `try-rs` spawn needs.
+///
+/// `SHELL` is cleared and `TRY_PATH` removed so the child can never reach the
+/// real user's shell integration or tries directory, and `TRY_CONFIG_DIR` is
+/// pinned to `config_dir` when one is given. Tests that do not care about
+/// configuration (help, version, CLI parse errors) pass `None`.
+fn sanitize(cmd: &mut Command, config_dir: Option<&Path>) {
+    cmd.env("SHELL", "").env_remove("TRY_PATH");
+    if let Some(dir) = config_dir {
+        cmd.env("TRY_CONFIG_DIR", dir);
+    }
+}
+
+/// A sanitized `cargo run -- ...` invocation of `try-rs`.
+///
+/// Arguments are appended by the caller so each test reads as its own command
+/// line.
+fn cargo_try(config_dir: Option<&Path>) -> Command {
+    let mut cmd = Command::new("cargo");
+    cmd.arg("run").arg("--");
+    sanitize(&mut cmd, config_dir);
+    cmd
+}
+
+/// A sanitized invocation of the already-built `try-rs` binary, run in `cwd`.
+///
+/// Needed where the working directory matters to `try-rs` itself (git
+/// fixtures); `cargo run` cannot be used there because cargo would look for a
+/// manifest in that directory.
+fn built_try(config_dir: Option<&Path>, cwd: &Path) -> Command {
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_try-rs"));
+    cmd.current_dir(cwd);
+    sanitize(&mut cmd, config_dir);
+    cmd
+}
+
+/// Spawn `try-rs` via `cargo run` with `args`.
+///
+/// `extra_env` is applied last and may override the sanitized defaults (e.g. to
+/// set `HOME`).
+fn spawn_try(config_dir: Option<&Path>, args: &[&str], extra_env: &[(&str, &str)]) -> Output {
+    let mut cmd = cargo_try(config_dir);
+    cmd.args(args);
+    for (key, value) in extra_env {
+        cmd.env(key, value);
+    }
+    run(&mut cmd)
 }
 
 struct Harness {
@@ -362,7 +364,7 @@ impl Harness {
     }
 
     fn run_try(&self, args: &[&str]) -> Output {
-        spawn_try(self.dir.path(), args, &[])
+        spawn_try(Some(self.dir.path()), args, &[])
     }
 
     fn tries_path(&self) -> PathBuf {
@@ -370,7 +372,7 @@ impl Harness {
     }
 
     fn run_try_with_env(&self, args: &[&str], env_key: &str, env_val: &str) -> Output {
-        spawn_try(self.dir.path(), args, &[(env_key, env_val)])
+        spawn_try(Some(self.dir.path()), args, &[(env_key, env_val)])
     }
 
     fn create_try_folder(&self, name: &str) {
@@ -414,14 +416,7 @@ fn multiple_new_folders() {
 
 #[test]
 fn help_contains_expected_flags() {
-    let p = Command::new("cargo")
-        .arg("run")
-        .arg("--")
-        .arg("--help")
-        .output()
-        .expect("failed to spawn");
-
-    let output = String::from_utf8(p.stdout).unwrap();
+    let output = spawn_try(None, &["--help"], &[]).stdout;
     assert!(output.contains("--setup"), "should document --setup flag");
     assert!(
         output.contains("--setup-stdout"),
@@ -443,22 +438,14 @@ fn help_contains_expected_flags() {
 
 #[test]
 fn inline_height_requires_inline_picker() {
-    let p = Command::new("cargo")
-        .arg("run")
-        .arg("--")
-        .arg("--inline-height")
-        .arg("22")
-        .output()
-        .expect("failed to spawn");
+    let p = spawn_try(None, &["--inline-height", "22"], &[]);
 
     assert!(
         !p.status.success(),
         "--inline-height should require --inline-picker"
     );
 
-    let stdout = String::from_utf8(p.stdout).unwrap();
-    let stderr = String::from_utf8(p.stderr).unwrap();
-    let output = format!("{stdout}\n{stderr}");
+    let output = format!("{}\n{}", p.stdout, p.stderr);
     assert!(
         output.contains("--inline-picker"),
         "error should mention missing --inline-picker"
@@ -489,7 +476,7 @@ fn config_with_editor_field() {
     );
     fs::write(dir.path().join("config.toml"), config).unwrap();
 
-    let p = spawn_try(dir.path(), &["editor-proj"], &[]);
+    let p = spawn_try(Some(dir.path()), &["editor-proj"], &[]);
 
     // It should create the folder successfully
     assert!(p.status.success() || !p.stdout.is_empty());
@@ -504,7 +491,7 @@ fn config_with_theme() {
     );
     fs::write(dir.path().join("config.toml"), config).unwrap();
 
-    let p = spawn_try(dir.path(), &["themed-proj"], &[]);
+    let p = spawn_try(Some(dir.path()), &["themed-proj"], &[]);
 
     assert!(p.stdout.contains("cd"), "should produce cd command");
 }
@@ -518,7 +505,7 @@ fn config_with_invalid_theme_falls_back() {
     );
     fs::write(dir.path().join("config.toml"), config).unwrap();
 
-    let p = spawn_try(dir.path(), &["fallback-proj"], &[]);
+    let p = spawn_try(Some(dir.path()), &["fallback-proj"], &[]);
 
     // Should still work, just using default theme
     assert!(p.stdout.contains("cd"), "should still produce cd command");
